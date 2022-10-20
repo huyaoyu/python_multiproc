@@ -73,7 +73,7 @@ class PoolWithLogger(object):
     optionally, has a file handler. 
     '''
     
-    def __init__(self, np, initializer, logger_name='tartanair', logger_fn=None):
+    def __init__(self, np, initializer, logger_name='tartanair', logger_fn=None, more_init_args=()):
         '''
         Note that the initializer must create the global variable the worker needs for logging.
         
@@ -85,10 +85,11 @@ class PoolWithLogger(object):
         
         super().__init__()
         
-        self.np          = np
-        self.initializer = initializer
-        self.logger_name = logger_name
-        self.logger_fn   = logger_fn
+        self.np             = np
+        self.initializer    = initializer
+        self.logger_name    = logger_name
+        self.logger_fn      = logger_fn
+        self.more_init_args = more_init_args
         
         # Create the queue for logging.
         self.manager   = mp.Manager()
@@ -173,7 +174,7 @@ class PoolWithLogger(object):
         self.close_and_join()
         
         # Create the pool.
-        self.pool = Pool(self.np, initializer=self.initializer, initargs=(self.logger_name, self.log_queue,))
+        self.pool = Pool(self.np, initializer=self.initializer, initargs=(self.logger_name, self.log_queue, *self.more_init_args))
         results = self.pool.starmap_async(func, iterable, *args, **kwargs)
         self.results = results.get()
         
