@@ -30,8 +30,8 @@ class ReplicatedArgument(object):
         return self.count
     
     def __getitem__(self, index):
-        assert 0 <= index < self.count, \
-            f'index out of range. index = {index}, self.count = {self.count}. '
+        if index < 0 or index >= self.count:
+            raise IndexError(f'index out of range. index = {index}, self.count = {self.count}. ')
         return self.value
 
 def logger_process(logger_name: str, queue: mp.Queue, fn: str=None):
