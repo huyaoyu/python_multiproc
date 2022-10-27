@@ -61,7 +61,7 @@ def logger_process(logger_name: str, queue: mp.Queue, fn: str=None):
         
         # Check for termination.
         if msg is None:
-            print(f'Logger process received the termination message. ')
+            # print(f'Logger process received the termination message. ')
             break
         
         # Log the message.
