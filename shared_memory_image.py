@@ -149,6 +149,10 @@ class SharedMemoryImage(object):
         return self.prorcessor_out(array)
 
     def __setitem__(self, idx, img):
+        '''
+        img: NumPy array of shape (G, H, W, C) or (G, H, W) with G being the group size.
+        '''
         img = self.prorcessor_in(img)
         array = self.as_array_at_idx(idx)
-        array[:, :, ...] = img
+        #     G, H, W, C
+        array[:, :, :, ...] = img
