@@ -36,7 +36,7 @@ def float_as_c4_uint8(img):
     elif img.ndim == 3 and img.shape[-1] != 1:
         raise Exception(f'img.shape = {img.shape}. Expecting image.shape[-1] == 1. ')
     
-    # Check if the input array is contaiguous.
+    # Check if the input array is contiguous.
     if ( not img.flags['C_CONTIGUOUS'] ):
         img = np.ascontiguousarray(img)
 
@@ -77,6 +77,10 @@ class SharedMemoryImage(object):
         porcessor_in is used to convert the input image to uint8 type with channel_depth. 
         Inversely, processor_out is used to convert the image from uint8 type to the original type.
         Use None for processor_in and processor_out if no conversions are needed.
+        
+        Note that internally, all images are stored in groups. Some even for a single image, the 
+        shape is [1, H, W, C]. If the user wants to strip the first dimension, then a dedicated
+        output processor function must be used.
 
         name: The name of the shared memory object.
         img_shape: The shape of the image, [H, W] or [H, W, C] including channel number.
