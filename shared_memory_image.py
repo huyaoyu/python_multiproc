@@ -4,20 +4,25 @@ import numpy as np
 def shm_size_from_img_shape( img_shape, channel_depth, n_grp=1 ):
     return int( np.prod( img_shape ) * channel_depth * n_grp )
 
+# ==================== Processor Functions ====================
 def pass_forward(img):
     return img
 
 def c4_uint8_as_float(img):
-    assert img.ndim == 3 and img.shape[2] == 4, f'img.shape = {img.shape}. Expecting image.shape[2] == 4. '
+    img = np.expand_dims(img, axis=-1) if img.ndim == 2 else img
+    assert img.ndim == 3 and img.shape[-1] == 4, \
+        f'img.shape = {img.shape}. Expecting image.shape[-1] == 4. '
     
     # Check if the input array is contiguous.
     if ( not img.flags['C_CONTIGUOUS'] ):
         img = np.ascontiguousarray(img)
 
-    return img.view('<f4')
+    return np.expand_dims( img.view('<f4'), axis=0)
 
 def c4_uint8_as_float_arr(img):
-    assert img.ndim == 4 and img.shape[3] == 4, f'img.shape = {img.shape}. Expecting image.shape[3] == 4. '
+    img = np.expand_dims(img, axis=-1) if img.ndim == 3 else img
+    assert img.ndim == 4 and img.shape[-1] == 4, \
+        f'img.shape = {img.shape}. Expecting image.shape[-1] == 4. '
     
     # Check if the input array is contiguous.
     if ( not img.flags['C_CONTIGUOUS'] ):
@@ -25,29 +30,31 @@ def c4_uint8_as_float_arr(img):
 
     return img.view('<f4')
 
-def float_as_c4_uint8(img):  
+def float_as_c4_uint8(img):
     if img.ndim == 2:
         img = np.expand_dims(img, axis=-1)
-    elif img.ndim == 3 and img.shape[2] != 1:
-        raise Exception(f'img.shape = {img.shape}. Expecting image.shape[2] == 1. ')
+    elif img.ndim == 3 and img.shape[-1] != 1:
+        raise Exception(f'img.shape = {img.shape}. Expecting image.shape[-1] == 1. ')
     
-    # Check if the input array is contiguous.
+    # Check if the input array is contaiguous.
     if ( not img.flags['C_CONTIGUOUS'] ):
         img = np.ascontiguousarray(img)
 
-    return img.view('<u1')
+    return np.expand_dims( img.view('<u1'), axis=0 )
 
 def float_as_c4_uint8_arr(img):  
     if img.ndim == 3:
         img = np.expand_dims(img, axis=-1)
-    elif img.ndim == 4 and img.shape[2] != 1:
-        raise Exception(f'img.shape = {img.shape}. Expecting image.shape[3] == 1. ')
+    elif img.ndim == 4 and img.shape[-1] != 1:
+        raise Exception(f'img.shape = {img.shape}. Expecting image.shape[-1] == 1. ')
     
     # Check if the input array is contiguous.
     if ( not img.flags['C_CONTIGUOUS'] ):
         img = np.ascontiguousarray(img)
 
     return img.view('<u1')
+
+# ==================== End of Processor Functions ====================
 
 class SharedMemoryImage(object):
     def __init__(self, name: str, img_shape: tuple, channel_depth: int=1, grp_sz: int=1, 
@@ -72,7 +79,7 @@ class SharedMemoryImage(object):
         Use None for processor_in and processor_out if no conversions are needed.
 
         name: The name of the shared memory object.
-        img_shape: The shape of the image, [H, W, C], including channel number.
+        img_shape: The shape of the image, [H, W] or [H, W, C] including channel number.
         channel_depth: The number of bytes per channel. Default is 1. For single-precision
             floating point values, use 4.
         grp_sz: The number of images in a group. Default is 1.
@@ -85,12 +92,8 @@ class SharedMemoryImage(object):
         self.name = name # The name of the shared memory object.
         
         #print(f"SharedMemoryImage ~~ Group_Sz: {grp_sz}, Image_Shape: {img_shape}")
-        if grp_sz != 1:
-            self.grouped_img_shape = (grp_sz, *img_shape[1:3], img_shape[3] * channel_depth) \
-            if len(img_shape) == 4 else ( grp_sz, *img_shape[1:3], channel_depth )
-        else:
-            self.grouped_img_shape = ( *img_shape[:2], img_shape[2] * channel_depth) \
-            if len(img_shape) == 3 else ( *img_shape[:2], channel_depth )
+        self.grouped_img_shape = (grp_sz, *img_shape[:2], img_shape[2] * channel_depth) \
+            if len(img_shape) == 3 else (grp_sz, *img_shape[:2], channel_depth )
         #print(f"Resulting Img Shape: {self.grouped_img_shape}")
 
         self.grp_capacity = np.prod( self.grouped_img_shape )
@@ -108,6 +111,9 @@ class SharedMemoryImage(object):
     
     @property
     def img_shape(self):
+        '''
+        Note that internally images are always represented as bytes.
+        '''
         return self.grouped_img_shape[1:]
 
     def initialize(self):
@@ -150,9 +156,15 @@ class SharedMemoryImage(object):
 
     def __setitem__(self, idx, img):
         '''
+        Note that the preprocessor must know how to handle the image dimension. img could ba a
+        single image with shape [H, W, C] or [H, W]. Or it could be a group of images with shape
+        [G, H, W, C] or [G, H, W]. There is an ambiguity between single 3-channel image and a group
+        of 1-channel images. Thus, the preprocessor must know how to handle this ambiguity.
+        
         img: NumPy array of shape (G, H, W, C) or (G, H, W) with G being the group size.
         '''
         img = self.prorcessor_in(img)
         array = self.as_array_at_idx(idx)
         #     G, H, W, C
         array[:, :, :, ...] = img
+        
