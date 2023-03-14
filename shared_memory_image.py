@@ -8,6 +8,17 @@ def shm_size_from_img_shape( img_shape, channel_depth, n_grp=1 ):
 def pass_forward(img):
     return img
 
+def enforce_group_dim(img):
+    if img.ndim == 2:
+        img = np.expand_dims(img, axis=-1)
+        
+    if img.ndim == 3:
+        return np.expand_dims(img, axis=0)
+    elif img.ndim == 4:
+        return img
+    else:
+        raise Exception(f'img.shape = {img.shape}. Expecting image.ndim in [2, 3, 4]. ')
+
 def c4_uint8_as_float(img):
     img = np.expand_dims(img, axis=-1) if img.ndim == 2 else img
     assert img.ndim == 3 and img.shape[-1] == 4, \
@@ -102,8 +113,8 @@ class SharedMemoryImage(object):
 
         self.grp_capacity = np.prod( self.grouped_img_shape )
 
-        self.prorcessor_in  = processor_in if processor_in is not None else pass_forward
-        self.prorcessor_out = processor_out if processor_out is not None else pass_forward
+        self.processor_in  = processor_in if processor_in is not None else pass_forward
+        self.processor_out = processor_out if processor_out is not None else pass_forward
 
         self.shm = None # User must call initialize() to assign a valid value.
         self.n_grp = n_grp
@@ -156,7 +167,7 @@ class SharedMemoryImage(object):
 
     def __getitem__(self, idx):
         array = self.as_array_at_idx(idx)
-        return self.prorcessor_out(array)
+        return self.processor_out(array)
 
     def __setitem__(self, idx, img):
         '''
@@ -167,7 +178,7 @@ class SharedMemoryImage(object):
         
         img: NumPy array of shape (G, H, W, C) or (G, H, W) with G being the group size.
         '''
-        img = self.prorcessor_in(img)
+        img = self.processor_in(img)
         array = self.as_array_at_idx(idx)
         #     G, H, W, C
         array[:, :, :, ...] = img
